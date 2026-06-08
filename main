@@ -14,7 +14,7 @@ ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 220, 0, 340)
+MainFrame.Size = UDim2.new(0, 220, 0, 325)
 MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.BorderSizePixel = 0
@@ -26,15 +26,15 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 6)
 UICorner.Parent = MainFrame
 
--- Title Bar (smaller header)
+-- Title Bar (even smaller)
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(1, 0, 0, 28)
-TitleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+TitleLabel.Size = UDim2.new(1, 0, 0, 24)
+TitleLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 TitleLabel.Text = "Steal A Brainrot Helper"
 TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
 TitleLabel.Font = Enum.Font.SourceSansBold
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 14
 TitleLabel.BorderSizePixel = 0
 TitleLabel.Parent = MainFrame
 
@@ -46,11 +46,11 @@ TitleCorner.Parent = TitleLabel
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Parent = MainFrame
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 4)
+UIListLayout.Padding = UDim.new(0, 3)
 
 -- Adjust layout positioning under title
 local ListOffset = Instance.new("UIPadding")
-ListOffset.PaddingTop = UDim.new(0, 32)
+ListOffset.PaddingTop = UDim.new(0, 27)
 ListOffset.PaddingLeft = UDim.new(0, 10)
 ListOffset.PaddingRight = UDim.new(0, 10)
 ListOffset.Parent = MainFrame
@@ -59,24 +59,24 @@ ListOffset.Parent = MainFrame
 local function CreateToggle(name, text, layoutOrder)
     local Frame = Instance.new("Frame")
     Frame.Name = name .. "Frame"
-    Frame.Size = UDim2.new(1, 0, 0, 26)
+    Frame.Size = UDim2.new(1, 0, 0, 24)
     Frame.BackgroundTransparency = 1
     Frame.LayoutOrder = layoutOrder
     Frame.Parent = MainFrame
 
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.7, 0, 1, 0)
+    Label.Size = UDim2.new(0.68, 0, 1, 0)
     Label.BackgroundTransparency = 1
     Label.Text = text
     Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.SourceSans
-    Label.TextSize = 14
+    Label.TextSize = 13.5
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Frame
 
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 45, 0, 20)
-    Button.Position = UDim2.new(1, -50, 0.5, -10)
+    Button.Size = UDim2.new(0, 48, 0, 19)
+    Button.Position = UDim2.new(1, -53, 0.5, -9.5)
     Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     Button.Text = "OFF"
     Button.TextColor3 = Color3.fromRGB(255, 100, 100)
@@ -109,14 +109,14 @@ end
 local function CreateButton(name, text, layoutOrder)
     local Frame = Instance.new("Frame")
     Frame.Name = name .. "Frame"
-    Frame.Size = UDim2.new(1, 0, 0, 30)
+    Frame.Size = UDim2.new(1, 0, 0, 28)
     Frame.BackgroundTransparency = 1
     Frame.LayoutOrder = layoutOrder
     Frame.Parent = MainFrame
 
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(1, -10, 0, 26)
-    Button.Position = UDim2.new(0, 5, 0.5, -13)
+    Button.Size = UDim2.new(1, -12, 0, 24)
+    Button.Position = UDim2.new(0, 6, 0.5, -12)
     Button.BackgroundColor3 = Color3.fromRGB(50, 70, 110)
     Button.Text = text
     Button.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -147,4 +147,4 @@ Button_InstantReset.MouseButton1Click:Connect(function()
     print("Instant Reset clicked")
 end)
 
-print("Brainrot Helper UI loaded - Header size reduced")
+print("Brainrot Helper UI updated - Header made smaller")
