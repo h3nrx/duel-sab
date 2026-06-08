@@ -1,9 +1,5 @@
---[[
-    Steal A Brainrot Helper
-    Features: Auto Kick, Steal on Speed (29), Steal Normal (59), ESP Best Brainrot,
-    ESP next Base, Anti Ragdoll, Instant Reset, Auto Grab Nearest, Anti Effects
-    Core GUI - Undetected
-]]
+-- Steal A Brainrot Helper
+-- Simple UI - All Features Working
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,24 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- ========== CHECK GETCONNECTIONS (KORREKT) ==========
-local hasGetConnections = false
-local function checkGetConnections()
-    local success, result = pcall(function()
-        local testPrompt = Instance.new("ProximityPrompt")
-        local connections = getconnections(testPrompt.Triggered)
-        testPrompt:Destroy()
-        return type(connections) == "table"
-    end)
-    return success and result == true
-end
-hasGetConnections = pcall(checkGetConnections) and checkGetConnections()
-
-if not hasGetConnections then
-    warn("[Brainrot Helper] getconnections() nicht verfügbar - Verwende Fallback")
-end
-
--- ========== SETTINGS ==========
+-- Settings
 local Settings = {
     AutoKick = false,
     StealOnSpeed = false,
@@ -42,19 +21,16 @@ local Settings = {
     AutoGrabNearest = false
 }
 
--- ========== SPEED VALUES ==========
+-- Speed Values
 local SPEED_NORMAL = 59
 local SPEED_ON_SPEED = 29
 
--- ========== VARIABLES ==========
+-- Variables
 local speedBoosterConnection = nil
-local autoGrabRunning = false
-local stealNormalRunning = false
-local stealOnSpeedRunning = false
+local bestESP = nil
+local baseESP = nil
 
--- ========== HELPER FUNCTIONS ==========
-
--- Find all enemy plots
+-- Helper Functions
 local function getEnemyPlots()
     local plots = workspace:FindFirstChild("Plots")
     if not plots then return {} end
@@ -75,7 +51,6 @@ local function getEnemyPlots()
     return enemyPlots
 end
 
--- Get all brainrots
 local function getAllBrainrots()
     local brainrots = {}
     local enemyPlots = getEnemyPlots()
@@ -124,7 +99,6 @@ local function getAllBrainrots()
                         position = spawn.Position,
                         name = animalName,
                         genValue = genValue,
-                        plot = plot,
                         animalModel = animalModel
                     })
                 end
@@ -136,7 +110,6 @@ local function getAllBrainrots()
     return brainrots
 end
 
--- Get nearest brainrot
 local function getNearestBrainrot()
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
@@ -155,7 +128,6 @@ local function getNearestBrainrot()
     return nearest, nearestDist
 end
 
--- Get best brainrot
 local function getBestBrainrot()
     local brainrots = getAllBrainrots()
     if #brainrots > 0 then
@@ -164,7 +136,6 @@ local function getBestBrainrot()
     return nil
 end
 
--- Speed booster
 local function setSpeed(speedValue)
     if speedBoosterConnection then
         speedBoosterConnection:Disconnect()
@@ -190,17 +161,14 @@ local function setSpeed(speedValue)
     end
 end
 
--- ========== STEAL FUNCTION ==========
 local function stealBrainrot(prompt)
     if not prompt or not prompt.Parent then return false end
     
-    -- Versuche zuerst fireproximityprompt
     local success = false
     if fireproximityprompt then
         success = pcall(fireproximityprompt, prompt)
     end
     
-    -- Fallback: Simuliere Input
     if not success then
         pcall(function()
             prompt:InputBegan(Enum.UserInputType.MouseButton1, false)
@@ -213,89 +181,71 @@ local function stealBrainrot(prompt)
     return success
 end
 
--- ========== AUTO GRAB NEAREST ==========
+-- Auto Grab Loop
 task.spawn(function()
     while true do
-        if Settings.AutoGrabNearest and not autoGrabRunning then
-            autoGrabRunning = true
-            while Settings.AutoGrabNearest do
-                local nearest = getNearestBrainrot()
-                if nearest and nearest.prompt then
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp and (hrp.Position - nearest.position).Magnitude <= 30 then
-                        stealBrainrot(nearest.prompt)
-                        task.wait(1.5)
-                    end
+        if Settings.AutoGrabNearest then
+            local nearest = getNearestBrainrot()
+            if nearest and nearest.prompt then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - nearest.position).Magnitude <= 30 then
+                    stealBrainrot(nearest.prompt)
+                    task.wait(1.5)
                 end
-                task.wait(0.3)
             end
-            autoGrabRunning = false
         end
-        task.wait(0.5)
+        task.wait(0.3)
     end
 end)
 
--- ========== STEAL NORMAL (59 Speed) ==========
+-- Steal Normal Loop
 task.spawn(function()
     while true do
-        if Settings.StealNormal and not stealNormalRunning then
-            stealNormalRunning = true
+        if Settings.StealNormal then
             setSpeed(SPEED_NORMAL)
-            while Settings.StealNormal do
-                local best = getBestBrainrot()
-                if best and best.prompt then
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp and (hrp.Position - best.position).Magnitude <= 30 then
-                        stealBrainrot(best.prompt)
-                        task.wait(1.5)
-                    end
+            local best = getBestBrainrot()
+            if best and best.prompt then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - best.position).Magnitude <= 30 then
+                    stealBrainrot(best.prompt)
+                    task.wait(1.5)
                 end
-                task.wait(0.3)
             end
-            if not Settings.StealOnSpeed then
-                setSpeed(nil)
-            end
-            stealNormalRunning = false
+        elseif not Settings.StealOnSpeed then
+            setSpeed(nil)
         end
-        task.wait(0.5)
+        task.wait(0.3)
     end
 end)
 
--- ========== STEAL ON SPEED (29 Speed) ==========
+-- Steal On Speed Loop
 task.spawn(function()
     while true do
-        if Settings.StealOnSpeed and not stealOnSpeedRunning then
-            stealOnSpeedRunning = true
+        if Settings.StealOnSpeed then
             setSpeed(SPEED_ON_SPEED)
-            while Settings.StealOnSpeed do
-                local best = getBestBrainrot()
-                if best and best.prompt then
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp and (hrp.Position - best.position).Magnitude <= 30 then
-                        stealBrainrot(best.prompt)
-                        task.wait(1.5)
-                    end
+            local best = getBestBrainrot()
+            if best and best.prompt then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - best.position).Magnitude <= 30 then
+                    stealBrainrot(best.prompt)
+                    task.wait(1.5)
                 end
-                task.wait(0.3)
             end
-            if not Settings.StealNormal then
-                setSpeed(nil)
-            end
-            stealOnSpeedRunning = false
+        elseif not Settings.StealNormal then
+            setSpeed(nil)
         end
-        task.wait(0.5)
+        task.wait(0.3)
     end
 end)
 
--- ========== AUTO KICK ON STEAL ==========
+-- Auto Kick
 task.spawn(function()
     local lastKickTime = 0
     while true do
         if Settings.AutoKick then
             local pg = LocalPlayer:FindFirstChild("PlayerGui")
             if pg then
-                local textLabels = pg:GetDescendants()
-                for _, obj in ipairs(textLabels) do
+                for _, obj in ipairs(pg:GetDescendants()) do
                     if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text then
                         local text = obj.Text:lower()
                         if text:find("you stole") and tick() - lastKickTime > 2 then
@@ -313,7 +263,7 @@ task.spawn(function()
     end
 end)
 
--- ========== ANTI RAGDOLL ==========
+-- Anti Ragdoll
 task.spawn(function()
     while true do
         if Settings.AntiRagdoll then
@@ -341,7 +291,7 @@ task.spawn(function()
     end
 end)
 
--- ========== ANTI EFFECTS ==========
+-- Anti Effects
 local function removeEffects()
     if not Settings.AntiEffects then return end
     
@@ -374,8 +324,7 @@ workspace.DescendantAdded:Connect(function(obj)
     end
 end)
 
--- ========== ESP BEST BRAINROT ==========
-local bestESP = nil
+-- ESP Best Brainrot
 task.spawn(function()
     while true do
         if Settings.ESPBestBrainrot then
@@ -403,8 +352,7 @@ task.spawn(function()
     end
 end)
 
--- ========== ESP NEXT BASE ==========
-local baseESP = nil
+-- ESP Next Base
 task.spawn(function()
     local function findNextBaseSpawn()
         local plots = workspace:FindFirstChild("Plots")
@@ -436,7 +384,7 @@ task.spawn(function()
             if spawnPos then
                 if not baseESP then
                     baseESP = Instance.new("Part")
-                    baseESP.Name = "NextBaseESP"
+                    baseESP.Name = "NextBase"
                     baseESP.Size = Vector3.new(8, 0.5, 8)
                     baseESP.Anchored = true
                     baseESP.CanCollide = false
@@ -444,23 +392,6 @@ task.spawn(function()
                     baseESP.BrickColor = BrickColor.new("Bright green")
                     baseESP.Material = Enum.Material.Neon
                     baseESP.Parent = workspace
-                    
-                    local billboard = Instance.new("BillboardGui")
-                    billboard.Adornee = baseESP
-                    billboard.Size = UDim2.new(0, 200, 0, 30)
-                    billboard.StudsOffset = Vector3.new(0, 2, 0)
-                    billboard.Parent = baseESP
-                    
-                    local label = Instance.new("TextLabel")
-                    label.Size = UDim2.new(1, 0, 1, 0)
-                    label.BackgroundTransparency = 1
-                    label.Text = "⬇️ NEXT BASE ⬇️"
-                    label.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    label.TextSize = 14
-                    label.Font = Enum.Font.GothamBold
-                    label.TextStrokeTransparency = 0
-                    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-                    label.Parent = billboard
                 end
                 baseESP.CFrame = CFrame.new(spawnPos)
             elseif baseESP then
@@ -475,7 +406,7 @@ task.spawn(function()
     end
 end)
 
--- ========== INSTANT RESET ==========
+-- Instant Reset
 local function instantReset()
     local char = LocalPlayer.Character
     if not char then return end
@@ -485,229 +416,148 @@ local function instantReset()
     end
 end
 
--- ========== CREATE UI ==========
+-- ========== SIMPLE UI ==========
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BrainrotHelper"
 screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local success, err = pcall(function()
-    screenGui.Parent = game:GetService("CoreGui")
-end)
-if not success then
+pcall(function() screenGui.Parent = game:GetService("CoreGui") end)
+if not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Main Frame
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 240, 0, 420)
-mainFrame.Position = UDim2.new(0.5, -120, 0.5, -210)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-mainFrame.BackgroundTransparency = 0.1
-mainFrame.BorderSizePixel = 0
+mainFrame.Size = UDim2.new(0, 200, 0, 310)
+mainFrame.Position = UDim2.new(0.5, -100, 0.5, -155)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.BorderSizePixel = 1
+mainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
 mainFrame.Parent = screenGui
 
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
+corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = mainFrame
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(255, 255, 255)
-stroke.Thickness = 1
-stroke.Transparency = 0.5
-stroke.Parent = mainFrame
-
--- Title
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 35)
+title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-title.BackgroundTransparency = 0.3
-title.Text = "Steal A Brainrot Helper"
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+title.Text = "Brainrot Helper"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 14
+title.TextSize = 13
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
-
 local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.CornerRadius = UDim.new(0, 8)
 titleCorner.Parent = title
 
--- Speed info
-local speedInfo = Instance.new("TextLabel")
-speedInfo.Size = UDim2.new(1, 0, 0, 18)
-speedInfo.Position = UDim2.new(0, 0, 0, 38)
-speedInfo.BackgroundTransparency = 1
-speedInfo.Text = "⚡ Normal: 59 Speed  |  🐢 On Speed: 29 Speed"
-speedInfo.TextColor3 = Color3.fromRGB(180, 180, 180)
-speedInfo.TextSize = 9
-speedInfo.Font = Enum.Font.Gotham
-speedInfo.Parent = mainFrame
-
--- Scrolling frame
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -10, 1, -95)
-scrollFrame.Position = UDim2.new(0, 5, 0, 60)
+scrollFrame.Size = UDim2.new(1, -10, 1, -70)
+scrollFrame.Position = UDim2.new(0, 5, 0, 35)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.ScrollBarThickness = 3
-scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 scrollFrame.Parent = mainFrame
 
 local scrollLayout = Instance.new("UIListLayout")
-scrollLayout.Padding = UDim.new(0, 8)
+scrollLayout.Padding = UDim.new(0, 5)
 scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
 scrollLayout.Parent = scrollFrame
 
--- Create toggle function
 local function createToggle(parent, text, settingName)
-    local toggleFrame = Instance.new("Frame")
-    toggleFrame.Size = UDim2.new(1, -10, 0, 32)
-    toggleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    toggleFrame.BackgroundTransparency = 0.5
-    toggleFrame.BorderSizePixel = 0
-    toggleFrame.Parent = parent
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -5, 0, 28)
+    frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    frame.BackgroundTransparency = 0.4
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
     
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 6)
-    toggleCorner.Parent = toggleFrame
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 4)
+    frameCorner.Parent = frame
     
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -50, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.TextSize = 12
-    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 11
+    label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = toggleFrame
+    label.Parent = frame
     
     local track = Instance.new("Frame")
-    track.Size = UDim2.new(0, 36, 0, 18)
-    track.Position = UDim2.new(1, -46, 0.5, -9)
+    track.Size = UDim2.new(0, 32, 0, 16)
+    track.Position = UDim2.new(1, -38, 0.5, -8)
     track.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
     track.BorderSizePixel = 0
-    track.Parent = toggleFrame
-    
+    track.Parent = frame
     local trackCorner = Instance.new("UICorner")
     trackCorner.CornerRadius = UDim.new(1, 0)
     trackCorner.Parent = track
     
     local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.Position = UDim2.new(0, 2, 0.5, -7)
-    knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    knob.Size = UDim2.new(0, 12, 0, 12)
+    knob.Position = UDim2.new(0, 2, 0.5, -6)
+    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
     knob.BorderSizePixel = 0
     knob.Parent = track
-    
     local knobCorner = Instance.new("UICorner")
     knobCorner.CornerRadius = UDim.new(1, 0)
     knobCorner.Parent = knob
-    
-    local function updateToggle(state)
-        Settings[settingName] = state
-        if state then
-            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(1, -16, 0.5, -7)}):Play()
-            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 180, 80)}):Play()
-            knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        else
-            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
-            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
-            knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-            
-            if settingName == "StealNormal" and not Settings.StealOnSpeed then
-                setSpeed(nil)
-            elseif settingName == "StealOnSpeed" and not Settings.StealNormal then
-                setSpeed(nil)
-            end
-        end
-    end
     
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(1, 0, 1, 0)
     button.BackgroundTransparency = 1
     button.Text = ""
-    button.Parent = toggleFrame
+    button.Parent = frame
     
     button.MouseButton1Click:Connect(function()
-        if settingName == "StealNormal" and not Settings[settingName] then
-            if Settings.StealOnSpeed then
-                Settings.StealOnSpeed = false
-                for _, child in ipairs(scrollFrame:GetChildren()) do
-                    if child:IsA("Frame") and child:FindFirstChildWhichIsA("TextLabel") then
-                        local lbl = child:FindFirstChildWhichIsA("TextLabel")
-                        if lbl and lbl.Text:find("Steal on Speed") then
-                            local otherTrack = child:FindFirstChildWhichIsA("Frame")
-                            local otherKnob = otherTrack and otherTrack:FindFirstChildWhichIsA("Frame")
-                            if otherTrack and otherKnob then
-                                TweenService:Create(otherKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
-                                TweenService:Create(otherTrack, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
-                                otherKnob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-                            end
-                            break
-                        end
-                    end
-                end
-            end
-        elseif settingName == "StealOnSpeed" and not Settings[settingName] then
-            if Settings.StealNormal then
-                Settings.StealNormal = false
-                for _, child in ipairs(scrollFrame:GetChildren()) do
-                    if child:IsA("Frame") and child:FindFirstChildWhichIsA("TextLabel") then
-                        local lbl = child:FindFirstChildWhichIsA("TextLabel")
-                        if lbl and lbl.Text:find("Steal Normal") then
-                            local otherTrack = child:FindFirstChildWhichIsA("Frame")
-                            local otherKnob = otherTrack and otherTrack:FindFirstChildWhichIsA("Frame")
-                            if otherTrack and otherKnob then
-                                TweenService:Create(otherKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
-                                TweenService:Create(otherTrack, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
-                                otherKnob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-                            end
-                            break
-                        end
-                    end
-                end
+        Settings[settingName] = not Settings[settingName]
+        if Settings[settingName] then
+            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(1, -14, 0.5, -6)}):Play()
+            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 160, 80)}):Play()
+            knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -6)}):Play()
+            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
+            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+            
+            if settingName == "StealNormal" then
+                setSpeed(nil)
+            elseif settingName == "StealOnSpeed" then
+                setSpeed(nil)
             end
         end
-        updateToggle(not Settings[settingName])
     end)
     
-    return toggleFrame
+    return frame
 end
 
--- Create all toggles
-local toggleList = {
-    {"🚀 Auto Grab Nearest", "AutoGrabNearest"},
-    {"⚡ Steal Normal (59 Speed)", "StealNormal"},
-    {"🐢 Steal on Speed (29 Speed)", "StealOnSpeed"},
-    {"👁️ ESP Best Brainrot", "ESPBestBrainrot"},
-    {"📍 ESP Next Base", "ESPNexBase"},
-    {"🛡️ Anti Ragdoll", "AntiRagdoll"},
-    {"🌀 Anti Effects", "AntiEffects"},
-    {"💀 Auto Kick on Steal", "AutoKick"}
-}
+createToggle(scrollFrame, "Auto Grab Nearest", "AutoGrabNearest")
+createToggle(scrollFrame, "Steal Normal (59 Speed)", "StealNormal")
+createToggle(scrollFrame, "Steal on Speed (29 Speed)", "StealOnSpeed")
+createToggle(scrollFrame, "ESP Best Brainrot", "ESPBestBrainrot")
+createToggle(scrollFrame, "ESP Next Base", "ESPNexBase")
+createToggle(scrollFrame, "Anti Ragdoll", "AntiRagdoll")
+createToggle(scrollFrame, "Anti Effects", "AntiEffects")
+createToggle(scrollFrame, "Auto Kick on Steal", "AutoKick")
 
-for _, toggle in ipairs(toggleList) do
-    createToggle(scrollFrame, toggle[1], toggle[2])
-end
-
--- Instant Reset Button
 local resetBtn = Instance.new("TextButton")
-resetBtn.Size = UDim2.new(1, -10, 0, 35)
-resetBtn.Position = UDim2.new(0, 5, 1, -40)
-resetBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-resetBtn.Text = "💀 INSTANT RESET 💀"
+resetBtn.Size = UDim2.new(1, -10, 0, 30)
+resetBtn.Position = UDim2.new(0, 5, 1, -35)
+resetBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+resetBtn.Text = "Instant Reset"
 resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-resetBtn.TextSize = 13
+resetBtn.TextSize = 11
 resetBtn.Font = Enum.Font.GothamBold
 resetBtn.Parent = mainFrame
-
-local resetCorner = Instance.new("UICorner")
-resetCorner.CornerRadius = UDim.new(0, 6)
-resetCorner.Parent = resetBtn
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 4)
+btnCorner.Parent = resetBtn
 
 resetBtn.MouseButton1Click:Connect(function()
     instantReset()
@@ -717,27 +567,20 @@ resetBtn.MouseEnter:Connect(function()
     TweenService:Create(resetBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
 end)
 resetBtn.MouseLeave:Connect(function()
-    TweenService:Create(resetBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 50)}):Play()
+    TweenService:Create(resetBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}):Play()
 end)
 
--- Footer
-local footer = Instance.new("Frame")
-footer.Size = UDim2.new(1, 0, 0, 25)
-footer.Position = UDim2.new(0, 0, 1, -25)
-footer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-footer.BackgroundTransparency = 0.5
+local footer = Instance.new("TextLabel")
+footer.Size = UDim2.new(1, 0, 0, 18)
+footer.Position = UDim2.new(0, 0, 1, -18)
+footer.BackgroundTransparency = 1
+footer.Text = "v1.0 | 59/29 Speed"
+footer.TextColor3 = Color3.fromRGB(120, 120, 130)
+footer.TextSize = 9
+footer.Font = Enum.Font.Gotham
 footer.Parent = mainFrame
 
-local versionLabel = Instance.new("TextLabel")
-versionLabel.Size = UDim2.new(1, 0, 1, 0)
-versionLabel.BackgroundTransparency = 1
-versionLabel.Text = "Brainrot Helper v1.0 | Normal:59  |  On Speed:29"
-versionLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-versionLabel.TextSize = 9
-versionLabel.Font = Enum.Font.Gotham
-versionLabel.Parent = footer
-
--- Drag functionality
+-- Drag
 local dragging = false
 local dragStart
 local frameStart
@@ -763,5 +606,4 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
-print("[Brainrot Helper] Loaded successfully!")
-print("[Brainrot Helper] Speed Settings: Normal=59 | On Speed=29")
+print("Brainrot Helper loaded.")
