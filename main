@@ -2,6 +2,8 @@
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local existingGui = CoreGui:FindFirstChild("BrainrotHelperUI")
 if existingGui then existingGui:Destroy() end
@@ -26,7 +28,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 6)
 UICorner.Parent = MainFrame
 
--- Title Bar (even smaller)
+-- Title Bar
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
 TitleLabel.Size = UDim2.new(1, 0, 0, 24)
@@ -42,20 +44,19 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 6)
 TitleCorner.Parent = TitleLabel
 
--- Layout Context for Options
+-- Layout
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Parent = MainFrame
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 3)
 
--- Adjust layout positioning under title
 local ListOffset = Instance.new("UIPadding")
 ListOffset.PaddingTop = UDim.new(0, 27)
 ListOffset.PaddingLeft = UDim.new(0, 10)
 ListOffset.PaddingRight = UDim.new(0, 10)
 ListOffset.Parent = MainFrame
 
--- Utility Function to Create Toggles
+-- Toggle Creator
 local function CreateToggle(name, text, layoutOrder)
     local Frame = Instance.new("Frame")
     Frame.Name = name .. "Frame"
@@ -102,11 +103,11 @@ local function CreateToggle(name, text, layoutOrder)
         end
     end)
     
-    return {Button = Button, State = function() return state end}
+    return {Button = Button, GetState = function() return state end}
 end
 
--- Utility Function to Create Buttons
-local function CreateButton(name, text, layoutOrder)
+-- Button Creator
+local function CreateButton(name, text, layoutOrder, callback)
     local Frame = Instance.new("Frame")
     Frame.Name = name .. "Frame"
     Frame.Size = UDim2.new(1, 0, 0, 28)
@@ -127,11 +128,36 @@ local function CreateButton(name, text, layoutOrder)
     local Corner = Instance.new("UICorner")
     Corner.CornerRadius = UDim.new(0, 4)
     Corner.Parent = Button
+
+    if callback then
+        Button.MouseButton1Click:Connect(callback)
+    end
     
     return Button
 end
 
--- Instantiate Components
+-- Instant Reset Function (from source)
+local instantRespawnDebounce = false
+local function instantReset()
+    if instantRespawnDebounce then return end
+    instantRespawnDebounce = true
+    local lp = Players.LocalPlayer
+    local oldChar = lp.Character
+    if not oldChar then 
+        instantRespawnDebounce = false
+        return 
+    end
+    local hrp = oldChar:FindFirstChild("HumanoidRootPart")
+    local hum = oldChar:FindFirstChildWhichIsA("Humanoid")
+    if hrp and hum then
+        hum.Health = 0
+        pcall(function() hrp.CFrame = CFrame.new(0, 50000, 0) end)
+    end
+    while lp.Character == oldChar do task.wait() end
+    instantRespawnDebounce = false
+end
+
+-- Create Toggles + Button
 local Toggle_AutoKick         = CreateToggle("AutoKick", "Auto Kick", 1)
 local Toggle_StealOnSpeed     = CreateToggle("StealOnSpeed", "Steal on Speed", 2)
 local Toggle_StealNormal      = CreateToggle("StealNormal", "Steal Normal", 3)
@@ -140,11 +166,6 @@ local Toggle_ESPNextBase      = CreateToggle("ESPNextBase", "ESP Next Base", 5)
 local Toggle_AntiRagdoll      = CreateToggle("AntiRagdoll", "Anti Ragdoll", 6)
 local Toggle_AutoGrabNearest  = CreateToggle("AutoGrabNearest", "Auto Grab Nearest", 7)
 local Toggle_AntiEffects      = CreateToggle("AntiEffects", "Anti Effects", 8)
-local Button_InstantReset     = CreateButton("InstantReset", "Instant Reset", 9)
+local Button_InstantReset     = CreateButton("InstantReset", "Instant Reset", 9, instantReset)
 
--- Placeholder hook points for future feature implementation
-Button_InstantReset.MouseButton1Click:Connect(function()
-    print("Instant Reset clicked")
-end)
-
-print("Brainrot Helper UI updated - Header made smaller")
+print("Brainrot Helper UI + Instant Reset loaded. Test the Instant Reset button.")
