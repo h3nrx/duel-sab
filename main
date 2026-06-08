@@ -1,8 +1,9 @@
 --[[
     Steal A Brainrot Helper
-    Features: Auto Kick, Steal on Speed (59), Steal Normal, ESP Best Brainrot,
+    Features: Auto Kick, Steal on Speed (29), Steal Normal (59), ESP Best Brainrot,
     ESP next Base, Anti Ragdoll, Instant Reset, Auto Grab Nearest, Anti Effects
     Core GUI - Undetected
+    MIT getconnections() Support - Fallback wenn nicht verfügbar
 ]]
 
 local Players = game:GetService("Players")
@@ -12,6 +13,14 @@ local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- ========== CHECK GETCONNECTIONS ==========
+local hasGetConnections = pcall(getconnections, game)
+local useFallbackSteal = not hasGetConnections
+
+if not hasGetConnections then
+    warn("[Brainrot Helper] getconnections() nicht verfügbar - Verwende Fallback Methode für Steals")
+end
 
 -- ========== SETTINGS ==========
 local Settings = {
@@ -25,15 +34,15 @@ local Settings = {
     AutoGrabNearest = false
 }
 
+-- ========== SPEED VALUES ==========
+local SPEED_NORMAL = 59
+local SPEED_ON_SPEED = 29
+
 -- ========== VARIABLES ==========
-local brainrotList = {}
-local espObjects = {}
-local nextBasePosition = nil
-local autoGrabActive = false
-local speedBoosterActive = false
-local speedValue = 59  -- Speed für Steal on Speed
-local lastStealTime = 0
-local currentStealMethod = "normal" -- "normal" oder "speed"
+local speedBoosterConnection = nil
+local autoGrabRunning = false
+local stealNormalRunning = false
+local stealOnSpeedRunning = false
 
 -- ========== HELPER FUNCTIONS ==========
 
@@ -58,7 +67,7 @@ local function getEnemyPlots()
     return enemyPlots
 end
 
--- Get all brainrots from all plots
+-- Get all brainrots
 local function getAllBrainrots()
     local brainrots = {}
     local enemyPlots = getEnemyPlots()
@@ -77,7 +86,6 @@ local function getAllBrainrots()
                     local genValue = 0
                     local animalModel = nil
                     
-                    -- Find animal model near podium
                     for _, obj in ipairs(workspace:GetDescendants()) do
                         if obj:IsA("Model") and obj:IsDescendantOf(plot) then
                             local dist = (obj:GetPivot().Position - spawn.Position).Magnitude
@@ -88,7 +96,6 @@ local function getAllBrainrots()
                         end
                     end
                     
-                    -- Get display name and generation from model
                     if animalModel then
                         for _, d in ipairs(animalModel:GetDescendants()) do
                             if d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
@@ -110,7 +117,6 @@ local function getAllBrainrots()
                         name = animalName,
                         genValue = genValue,
                         plot = plot,
-                        podium = podium,
                         animalModel = animalModel
                     })
                 end
@@ -118,7 +124,6 @@ local function getAllBrainrots()
         end
     end
     
-    -- Sort by gen value for best ESP
     table.sort(brainrots, function(a, b) return a.genValue > b.genValue end)
     return brainrots
 end
@@ -142,7 +147,7 @@ local function getNearestBrainrot()
     return nearest, nearestDist
 end
 
--- Get best brainrot (highest gen)
+-- Get best brainrot
 local function getBestBrainrot()
     local brainrots = getAllBrainrots()
     if #brainrots > 0 then
@@ -151,44 +156,663 @@ local function getBestBrainrot()
     return nil
 end
 
--- Speed booster (für Steal on Speed)
-local speedBoosterConnection = nil
-local function startSpeedBooster()
+-- Speed booster
+local function setSpeed(speedValue)
     if speedBoosterConnection then
         speedBoosterConnection:Disconnect()
         speedBoosterConnection = nil
     end
     
-    speedBoosterConnection = RunService.Heartbeat:Connect(function()
-        if not Settings.StealOnSpeed then return end
-        
-        local char = LocalPlayer.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        
-        if hrp and hum then
-            local moveDir = hum.MoveDirection
-            if moveDir.Magnitude > 0 then
-                local flatDir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
-                hrp.Velocity = Vector3.new(flatDir.X * speedValue, hrp.Velocity.Y, flatDir.Z * speedValue)
+    if speedValue then
+        speedBoosterConnection = RunService.Heartbeat:Connect(function()
+            if not (Settings.StealNormal or Settings.StealOnSpeed) then return end
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            
+            if hrp and hum then
+                local moveDir = hum.MoveDirection
+                if moveDir.Magnitude > 0 then
+                    local flatDir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+                    hrp.Velocity = Vector3.new(flatDir.X * speedValue, hrp.Velocity.Y, flatDir.Z * speedValue)
+                end
             end
-        end
-    end)
-end
-
-local function stopSpeedBooster()
-    if speedBoosterConnection then
-        speedBoosterConnection:Disconnect()
-        speedBoosterConnection = nil
+        end)
     end
 end
 
--- Steal function
-local function stealBrainrot(prompt, useSpeed)
+-- ========== STEAL FUNCTION (MIT FALLBACK) ==========
+local function stealBrainrot(prompt)
     if not prompt or not prompt.Parent then return false end
     
-    -- Aktiviere Speed wenn nötig
-    if useSpeed and not Settings.StealOnSpeed then
-        -- Temporär Speed für diesen Steal aktivieren
-        local oldSetting
+    local success = false
+    
+    if not useFallbackSteal and hasGetConnections then
+        -- === METHODE 1: Mit getconnections() ===
+        local holdCallbacks = {}
+        local triggerCallbacks = {}
+        
+        local ok1, conns1 = pcall(getconnections, prompt.PromptButtonHoldBegan)
+        if ok1 then
+            for _, conn in ipairs(conns1) do
+                if type(conn.Function) == "function" then
+                    table.insert(holdCallbacks, conn.Function)
+                end
+            end
+        end
+        
+        local ok2, conns2 = pcall(getconnections, prompt.Triggered)
+        if ok2 then
+            for _, conn in ipairs(conns2) do
+                if type(conn.Function) == "function" then
+                    table.insert(triggerCallbacks, conn.Function)
+                end
+            end
+        end
+        
+        if #holdCallbacks > 0 or #triggerCallbacks > 0 then
+            for _, fn in ipairs(holdCallbacks) do
+                task.spawn(fn)
+            end
+            
+            local holdDuration = prompt.HoldDuration
+            if holdDuration < 1 then holdDuration = 1.3 end
+            task.wait(holdDuration - 0.1)
+            
+            for _, fn in ipairs(triggerCallbacks) do
+                task.spawn(fn)
+            end
+            success = true
+        end
+    end
+    
+    -- === METHODE 2: Fallback (wenn getconnections nicht verfügbar oder fehlgeschlagen) ===
+    if not success then
+        if fireproximityprompt then
+            success = pcall(fireproximityprompt, prompt)
+        end
+        
+        if not success then
+            pcall(function()
+                prompt:InputBegan(Enum.UserInputType.MouseButton1, false)
+                task.wait(1.3)
+                prompt:InputEnded(Enum.UserInputType.MouseButton1, false)
+            end)
+            success = true
+        end
+    end
+    
+    return success
+end
+
+-- ========== AUTO GRAB NEAREST ==========
+task.spawn(function()
+    while true do
+        if Settings.AutoGrabNearest and not autoGrabRunning then
+            autoGrabRunning = true
+            while Settings.AutoGrabNearest do
+                local nearest = getNearestBrainrot()
+                if nearest and nearest.prompt then
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and (hrp.Position - nearest.position).Magnitude <= 30 then
+                        stealBrainrot(nearest.prompt)
+                        task.wait(1.5)
+                    end
+                end
+                task.wait(0.3)
+            end
+            autoGrabRunning = false
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== STEAL NORMAL (59 Speed) ==========
+task.spawn(function()
+    while true do
+        if Settings.StealNormal and not stealNormalRunning then
+            stealNormalRunning = true
+            setSpeed(SPEED_NORMAL)
+            while Settings.StealNormal do
+                local best = getBestBrainrot()
+                if best and best.prompt then
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and (hrp.Position - best.position).Magnitude <= 30 then
+                        stealBrainrot(best.prompt)
+                        task.wait(1.5)
+                    end
+                end
+                task.wait(0.3)
+            end
+            if not Settings.StealOnSpeed then
+                setSpeed(nil)
+            end
+            stealNormalRunning = false
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== STEAL ON SPEED (29 Speed) ==========
+task.spawn(function()
+    while true do
+        if Settings.StealOnSpeed and not stealOnSpeedRunning then
+            stealOnSpeedRunning = true
+            setSpeed(SPEED_ON_SPEED)
+            while Settings.StealOnSpeed do
+                local best = getBestBrainrot()
+                if best and best.prompt then
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and (hrp.Position - best.position).Magnitude <= 30 then
+                        stealBrainrot(best.prompt)
+                        task.wait(1.5)
+                    end
+                end
+                task.wait(0.3)
+            end
+            if not Settings.StealNormal then
+                setSpeed(nil)
+            end
+            stealOnSpeedRunning = false
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== AUTO KICK ON STEAL ==========
+task.spawn(function()
+    local lastKickTime = 0
+    while true do
+        if Settings.AutoKick then
+            local chat = LocalPlayer:FindFirstChild("PlayerGui")
+            if chat then
+                local textLabels = chat:GetDescendants()
+                for _, obj in ipairs(textLabels) do
+                    if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text then
+                        local text = obj.Text:lower()
+                        if text:find("you stole") and tick() - lastKickTime > 2 then
+                            lastKickTime = tick()
+                            task.spawn(function()
+                                pcall(function() LocalPlayer:Kick("Auto Kick - Steal detected") end)
+                                pcall(function() game:Shutdown() end)
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== ANTI RAGDOLL ==========
+task.spawn(function()
+    while true do
+        if Settings.AntiRagdoll then
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                
+                if hum then
+                    local state = hum:GetState()
+                    if state == Enum.HumanoidStateType.Physics or 
+                       state == Enum.HumanoidStateType.Ragdoll or
+                       state == Enum.HumanoidStateType.FallingDown then
+                        if hum.Health > 0 then
+                            hum:ChangeState(Enum.HumanoidStateType.Running)
+                        end
+                        if hrp then
+                            hrp.Velocity = Vector3.zero
+                            hrp.Anchored = false
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
+-- ========== ANTI EFFECTS ==========
+local function removeEffects()
+    if not Settings.AntiEffects then return end
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or 
+           obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            pcall(function() obj.Enabled = false end)
+        end
+    end
+    
+    for _, effect in ipairs(Lighting:GetChildren()) do
+        if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or
+           effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") then
+            pcall(function() effect.Enabled = false end)
+        end
+    end
+    
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 1e9
+end
+
+-- Initial anti effects
+removeEffects()
+
+workspace.DescendantAdded:Connect(function(obj)
+    if Settings.AntiEffects then
+        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or
+           obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            pcall(function() obj.Enabled = false end)
+        end
+    end
+end)
+
+-- ========== ESP BEST BRAINROT ==========
+local bestESP = nil
+task.spawn(function()
+    while true do
+        if Settings.ESPBestBrainrot then
+            local best = getBestBrainrot()
+            if best and best.animalModel then
+                if not bestESP or not bestESP.Parent then
+                    if bestESP then bestESP:Destroy() end
+                    bestESP = Instance.new("Highlight")
+                    bestESP.FillColor = Color3.fromRGB(255, 0, 0)
+                    bestESP.FillTransparency = 0.5
+                    bestESP.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    bestESP.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                end
+                bestESP.Adornee = best.animalModel
+                bestESP.Parent = best.animalModel
+            elseif bestESP then
+                bestESP:Destroy()
+                bestESP = nil
+            end
+        elseif bestESP then
+            bestESP:Destroy()
+            bestESP = nil
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== ESP NEXT BASE ==========
+local baseESP = nil
+task.spawn(function()
+    local function findNextBaseSpawn()
+        local plots = workspace:FindFirstChild("Plots")
+        if not plots then return nil end
+        
+        local myOrder = nil
+        for _, plot in ipairs(plots:GetChildren()) do
+            local sign = plot:FindFirstChild("PlotSign")
+            if sign then
+                local yourBase = sign:FindFirstChild("YourBase")
+                if yourBase and yourBase.Enabled then
+                    myOrder = plot:GetAttribute("Order")
+                    break
+                end
+            end
+        end
+        
+        if myOrder == 1 then
+            return Vector3.new(-337, -5, 103)
+        elseif myOrder == 2 then
+            return Vector3.new(-334.80, -5.04, 18.90)
+        end
+        return nil
+    end
+    
+    while true do
+        if Settings.ESPNexBase then
+            local spawnPos = findNextBaseSpawn()
+            if spawnPos then
+                if not baseESP then
+                    baseESP = Instance.new("Part")
+                    baseESP.Name = "NextBaseESP"
+                    baseESP.Size = Vector3.new(8, 0.5, 8)
+                    baseESP.Anchored = true
+                    baseESP.CanCollide = false
+                    baseESP.Transparency = 0.5
+                    baseESP.BrickColor = BrickColor.new("Bright green")
+                    baseESP.Material = Enum.Material.Neon
+                    baseESP.Parent = workspace
+                    
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Adornee = baseESP
+                    billboard.Size = UDim2.new(0, 200, 0, 30)
+                    billboard.StudsOffset = Vector3.new(0, 2, 0)
+                    billboard.Parent = baseESP
+                    
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.BackgroundTransparency = 1
+                    label.Text = "⬇️ NEXT BASE ⬇️"
+                    label.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    label.TextSize = 14
+                    label.Font = Enum.Font.GothamBold
+                    label.TextStrokeTransparency = 0
+                    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+                    label.Parent = billboard
+                end
+                baseESP.CFrame = CFrame.new(spawnPos)
+            elseif baseESP then
+                baseESP:Destroy()
+                baseESP = nil
+            end
+        elseif baseESP then
+            baseESP:Destroy()
+            baseESP = nil
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ========== INSTANT RESET ==========
+local function instantReset()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.Health = 0
+    end
+end
+
+-- ========== CREATE UI ==========
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BrainrotHelper"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() screenGui.Parent = game:GetService("CoreGui") end)
+if not screenGui.Parent then
+    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 240, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -120, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Thickness = 1
+stroke.Transparency = 0.5
+stroke.Parent = mainFrame
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+title.BackgroundTransparency = 0.3
+title.Text = "Steal A Brainrot Helper"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = title
+
+-- Speed info
+local speedInfo = Instance.new("TextLabel")
+speedInfo.Size = UDim2.new(1, 0, 0, 18)
+speedInfo.Position = UDim2.new(0, 0, 0, 38)
+speedInfo.BackgroundTransparency = 1
+speedInfo.Text = "⚡ Normal: 59 Speed  |  🐢 On Speed: 29 Speed"
+speedInfo.TextColor3 = Color3.fromRGB(180, 180, 180)
+speedInfo.TextSize = 9
+speedInfo.Font = Enum.Font.Gotham
+speedInfo.Parent = mainFrame
+
+-- Getconnections Status
+local statusInfo = Instance.new("TextLabel")
+statusInfo.Size = UDim2.new(1, 0, 0, 14)
+statusInfo.Position = UDim2.new(0, 0, 0, 56)
+statusInfo.BackgroundTransparency = 1
+if hasGetConnections then
+    statusInfo.Text = "✅ Steal Mode: Premium (getconnections aktiv)"
+    statusInfo.TextColor3 = Color3.fromRGB(80, 200, 80)
+else
+    statusInfo.Text = "⚠️ Steal Mode: Fallback (getconnections nicht verfügbar)"
+    statusInfo.TextColor3 = Color3.fromRGB(255, 200, 0)
+end
+statusInfo.TextSize = 8
+statusInfo.Font = Enum.Font.Gotham
+statusInfo.Parent = mainFrame
+
+-- Scrolling frame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -10, 1, -115)
+scrollFrame.Position = UDim2.new(0, 5, 0, 74)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.Parent = mainFrame
+
+local scrollLayout = Instance.new("UIListLayout")
+scrollLayout.Padding = UDim.new(0, 8)
+scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
+scrollLayout.Parent = scrollFrame
+
+-- Create toggle function
+local function createToggle(parent, text, settingName)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(1, -10, 0, 32)
+    toggleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    toggleFrame.BackgroundTransparency = 0.5
+    toggleFrame.BorderSizePixel = 0
+    toggleFrame.Parent = parent
+    
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 6)
+    toggleCorner.Parent = toggleFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 12
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleFrame
+    
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(0, 36, 0, 18)
+    track.Position = UDim2.new(1, -46, 0.5, -9)
+    track.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    track.BorderSizePixel = 0
+    track.Parent = toggleFrame
+    local trackCorner = Instance.new("UICorner")
+    trackCorner.CornerRadius = UDim.new(1, 0)
+    trackCorner.Parent = track
+    
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(0, 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    knob.BorderSizePixel = 0
+    knob.Parent = track
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = knob
+    
+    local function updateToggle(state)
+        Settings[settingName] = state
+        if state then
+            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(1, -16, 0.5, -7)}):Play()
+            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 180, 80)}):Play()
+            knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
+            TweenService:Create(track, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
+            knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+            
+            if settingName == "StealNormal" and not Settings.StealOnSpeed then
+                setSpeed(nil)
+            elseif settingName == "StealOnSpeed" and not Settings.StealNormal then
+                setSpeed(nil)
+            end
+        end
+    end
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, 0, 1, 0)
+    button.BackgroundTransparency = 1
+    button.Text = ""
+    button.Parent = toggleFrame
+    
+    button.MouseButton1Click:Connect(function()
+        if settingName == "StealNormal" and not Settings[settingName] then
+            if Settings.StealOnSpeed then
+                for _, child in ipairs(scrollFrame:GetChildren()) do
+                    if child:IsA("Frame") and child:FindFirstChildWhichIsA("TextLabel") then
+                        local lbl = child:FindFirstChildWhichIsA("TextLabel")
+                        if lbl and lbl.Text:find("Steal on Speed") then
+                            local otherTrack = child:FindFirstChildWhichIsA("Frame")
+                            local otherKnob = otherTrack and otherTrack:FindFirstChildWhichIsA("Frame")
+                            if otherTrack and otherKnob then
+                                TweenService:Create(otherKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
+                                TweenService:Create(otherTrack, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
+                                otherKnob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+                            end
+                            break
+                        end
+                    end
+                end
+                Settings.StealOnSpeed = false
+            end
+        elseif settingName == "StealOnSpeed" and not Settings[settingName] then
+            if Settings.StealNormal then
+                for _, child in ipairs(scrollFrame:GetChildren()) do
+                    if child:IsA("Frame") and child:FindFirstChildWhichIsA("TextLabel") then
+                        local lbl = child:FindFirstChildWhichIsA("TextLabel")
+                        if lbl and lbl.Text:find("Steal Normal") then
+                            local otherTrack = child:FindFirstChildWhichIsA("Frame")
+                            local otherKnob = otherTrack and otherTrack:FindFirstChildWhichIsA("Frame")
+                            if otherTrack and otherKnob then
+                                TweenService:Create(otherKnob, TweenInfo.new(0.1), {Position = UDim2.new(0, 2, 0.5, -7)}):Play()
+                                TweenService:Create(otherTrack, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(50, 50, 55)}):Play()
+                                otherKnob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+                            end
+                            break
+                        end
+                    end
+                end
+                Settings.StealNormal = false
+            end
+        end
+        updateToggle(not Settings[settingName])
+    end)
+    
+    return toggleFrame
+end
+
+-- Create all toggles
+local toggleList = {
+    {"🚀 Auto Grab Nearest", "AutoGrabNearest"},
+    {"⚡ Steal Normal (59 Speed)", "StealNormal"},
+    {"🐢 Steal on Speed (29 Speed)", "StealOnSpeed"},
+    {"👁️ ESP Best Brainrot", "ESPBestBrainrot"},
+    {"📍 ESP Next Base", "ESPNexBase"},
+    {"🛡️ Anti Ragdoll", "AntiRagdoll"},
+    {"🌀 Anti Effects", "AntiEffects"},
+    {"💀 Auto Kick on Steal", "AutoKick"}
+}
+
+for _, toggle in ipairs(toggleList) do
+    createToggle(scrollFrame, toggle[1], toggle[2])
+end
+
+-- Instant Reset Button
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(1, -10, 0, 35)
+resetBtn.Position = UDim2.new(0, 5, 1, -40)
+resetBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+resetBtn.Text = "💀 INSTANT RESET 💀"
+resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetBtn.TextSize = 13
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.Parent = mainFrame
+
+local resetCorner = Instance.new("UICorner")
+resetCorner.CornerRadius = UDim.new(0, 6)
+resetCorner.Parent = resetBtn
+
+resetBtn.MouseButton1Click:Connect(function()
+    instantReset()
+end)
+
+resetBtn.MouseEnter:Connect(function()
+    TweenService:Create(resetBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
+end)
+resetBtn.MouseLeave:Connect(function()
+    TweenService:Create(resetBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 50)}):Play()
+end)
+
+-- Footer
+local footer = Instance.new("Frame")
+footer.Size = UDim2.new(1, 0, 0, 25)
+footer.Position = UDim2.new(0, 0, 1, -25)
+footer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+footer.BackgroundTransparency = 0.5
+footer.Parent = mainFrame
+
+local versionLabel = Instance.new("TextLabel")
+versionLabel.Size = UDim2.new(1, 0, 1, 0)
+versionLabel.BackgroundTransparency = 1
+versionLabel.Text = "Brainrot Helper v1.0 | Normal:59  |  On Speed:29"
+versionLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+versionLabel.TextSize = 9
+versionLabel.Font = Enum.Font.Gotham
+versionLabel.Parent = footer
+
+-- Drag functionality
+local dragging = false
+local dragStart
+local frameStart
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        frameStart = mainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+print("[Brainrot Helper] Loaded successfully!")
+if hasGetConnections then
+    print("[Brainrot Helper] ✅ getconnections() verfügbar - Premium Steal Modus aktiv")
+else
+    print("[Brainrot Helper] ⚠️ getconnections() NICHT verfügbar - Verwende Fallback Modus")
+    print("[Brainrot Helper] ⚠️ Steal Funktionen könnten eingeschränkt sein, aber ESP, Anti Ragdoll, etc. funktionieren")
+end
+print("[Brainrot Helper] Speed Settings: Normal=59 | On Speed=29")
